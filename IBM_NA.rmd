@@ -1,0 +1,113 @@
+---
+title: "IBM"
+author: "Yushu Zhou"
+date: "March 17, 2017"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r, message = FALSE, warning = FALSE}
+library(dplyr)
+library(readxl)
+library(imputeTS)
+nyco <- readRDS("NYC only data")
+meta <- read_excel("CA_Metadata.xlsx")
+splag <- readRDS("NYC only data 2166 with spatial lag")
+
+# Delete duplicated rows
+nyco <- nyco[!duplicated(nyco[,c("MP_DATE","TRACT_GEOID")]),]
+
+# Subset independent variables
+indv <- c()
+for (i in 1:353) {
+  if (meta[i, c("train")] == 1) {
+    indv <- c(indv, meta[i, c("column_id")])
+  }  
+}
+indv_2 <- c()
+for (i in 1:(length(indv)-1)) {
+  indv_2 <- c(indv_2, indv[[i]])
+}
+train_1 <- nyco[, c("MP_DATE", "TRACT_GEOID", indv_2)]
+train_1 <- train_1[-which(train_1$TRACT_GEOID %in% c(36085008900,36085990100)), ]
+
+# Deal with NA
+## yelp
+yelp <- train_1[, 153:176]
+yelp[is.na(yelp)] <- 0
+train_1[, 153:176] <- 0
+## inventory
+invent <- train_1[, "INVENTORYMEASURE_PUBLIC"]
+invent[is.na(invent)] <- 0
+train_1$INVENTORYMEASURE_PUBLIC <- invent
+## turnover
+turnover <- as.data.frame(train_1[, c("TRACT_GEOID", "MP_DATE","TURNOVER_ALLHOMES")])
+new <- rep(NA_real_, 162450)
+index <- c()
+for (i in 1:2166) {
+  if (sum(is.na(turnover$TURNOVER_ALLHOMES[(75*(i-1)+1):(75*i)])) != 75 ) {
+    new[(75*(i-1)+1):(75*i)] <- na.interpolation(turnover$TURNOVER_ALLHOMES[(75*(i-1)+1):(75*i)])
+  } else {
+    new[(75*(i-1)+1):(75*i)] <- NA
+    index <- c(index, i)
+  }
+}
+by.month.to <- turnover %>%
+  group_by(MP_DATE) %>%
+  summarise(to = mean(TURNOVER_ALLHOMES, na.rm = TRUE))
+for (i in index) {
+  new[(75*(i-1)+1):(75*i)] <- by.month.to$to
+}
+train_1$TURNOVER_ALLHOMES <- new
+## census
+census <- train_1[, c(38:64, 66:72, 101:124)]
+for (j in 1:58) {
+  for (i in 1:2166) {
+    if (sum(is.na(census[(75*(i-1)+1):(75*i), j])) != 75 ) {
+      census[(75*(i-1)+1):(75*i), j] <- na.interpolation(census[(75*(i-1)+1):(75*i), j])
+    } 
+  }
+}
+train_1[, c(38:64, 66:72, 101:124)] <- census
+final <- train_1[, c(1, 101, 102, 122:124)]
+by.month.census <- final %>%
+  group_by(MP_DATE) %>%
+  summarise(b1 = mean(B00001_001, na.rm = TRUE), b2 = mean(B00002_001, na.rm = TRUE), 
+            b3 = mean(B19083_001, na.rm = TRUE), b4 = mean(B19013_001, na.rm = TRUE),
+            b5 = mean(B19025_001, na.rm = TRUE))
+col_ind <- c(101, 102, 122:124)
+k <- 2
+for (i in col_ind) {
+  for (j in 1:2166) {
+    if (sum(is.na(train_1[(75*(j-1)+1):(75*j), i])) == 75 ) {
+      train_1[(75*(j-1)+1):(75*j), i] <- by.month.census[, k]  
+    }
+  }
+  k <- k + 1
+}
+## check
+for (i in 1:176) {
+  if (sum(is.na(train_1[, i]) != 0)) {
+    print(c(i, sum(is.na(train_1[, i]))))
+  }
+}
+
+# add spatial lag and dependent variable
+train_1$lagdv <- splag[, 363]
+train_1$dv <- splag[, 362]
+
+# training set and cross validation
+train1650$subdate <- as.numeric(substr(train1650$MP_DATE, 1, 4)) # substring the first four characters of MP_DATE
+summary(train1650$subdate)
+trainingset <- train1650[which(train1650$subdate < 2015), ] # subset rows where subdate < 2015. Don't forget that this specifies rows, need a comma to show you don't specifiy columns
+testingset <- train1650[which(train1650$subdate >= 2015), ]
+
+for (i in 1:175) {
+  print(c(class(pca_x[,i]), i))
+}
+pca_x <- train_x[, -which(names(train_x) %in% c("MP_DATE", "MP_DATE.1", "TRACT_GEOID"))]
+pca_x$lagdv <- as.numeric(levels(pca_x$lagdv))[pca_x$lagdv]
+pr_out <- prcomp(pca_x) 
