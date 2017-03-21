@@ -1,6 +1,6 @@
 ---
 title: "IBM"
-author: "Yushu Zhou"
+author: "Yushu Zhou and Yuqi Nie"
 date: "March 17, 2017"
 output: ioslides_presentation
 ---
