@@ -9,7 +9,7 @@ output: ioslides_presentation
 knitr::opts_chunk$set(echo = FALSE)
 ```
 
-```{r, message = FALSE, warning = FALSE}
+```r
 library(dplyr)
 library(readxl)
 library(imputeTS)
@@ -111,4 +111,3 @@ for (i in 1:175) {
 pca_x <- train_x[, -which(names(train_x) %in% c("MP_DATE", "MP_DATE.1", "TRACT_GEOID"))]
 pca_x$lagdv <- as.numeric(levels(pca_x$lagdv))[pca_x$lagdv]
 pr_out <- prcomp(pca_x) 
-```
