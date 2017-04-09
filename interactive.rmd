@@ -1,0 +1,70 @@
+---
+title: "interactive"
+author: "Yushu Zhou"
+date: "April 9, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message = FALSE}
+library(leaflet)
+library(sp)
+library(rgdal)
+library(sp)
+library(tmap)
+library(rgeos)
+library(dplyr)
+library(mapmate)
+
+ny_shape <- readOGR("C:/Users/green/Desktop/IBM Data/Columbia Data/NYC_shapefile/.", "cb_2015_36_tract_500k")
+nyc_shape <- ny_shape[ny_shape$COUNTYFP %in% c("005","047","061","081","085"),]
+nyco <- readRDS("nyco_final")
+colnames(nyco)[2] <- "GEOID"
+nyco$GEOID <- as.factor(nyco$GEOID)
+nyc_shape@data <- left_join(nyc_shape@data, nyco[seq(1, 162450, 75), c(2, seq(153,176), 178)], by = "GEOID")
+nyc_df <- nyc_shape@data
+
+tm <- tm_shape(nyc_shape)
+tm1 <- tm + tm_borders(col = "grey", alpha = 0.5) +
+  tm_style_cobalt()
+```  
+
+```{r}
+leaflet(options = leafletOptions(minZoom = 0, maxZoom = 18))
+m = leaflet(nyc_shape) %>% 
+    addPolygons(
+    stroke = FALSE, fillOpacity = 0.5, smoothFactor = 0.5, 
+    color = ~colorQuantile("RdYlGn", dv)(dv),
+    popup = paste("Arts:", nyc_shape@data$NUM_Arts_Entertainment,"<br/>",
+                  "Banks:", nyc_shape@data$NUM_Banks_Credit_Unions))
+m  %>%
+  addLegend("bottomright", 
+    pal = colorNumeric("RdYlGn", nyc_shape@data$dv), values = ~dv,
+    title = "Dependent variable in 2010.01", opacity = 0.5)
+```  
+```{r}
+library(rworldmap)
+library(rworldxtra) # required for "high" resolution map
+library(maptools) # required for fortify to work
+# also recommend installing rgeos
+
+spdf <- joinCountryData2Map(countryExData, mapResolution="high")
+spdf@data$id <- rownames(spdf@data)
+bio <- ggplot2::fortify(spdf, region="id") %>%
+  left_join(subset(spdf@data, select=c(id, BIODIVERSITY)), by="id")
+n <- 30
+bio <- map(1:n, ~mutate(bio, frameID = .x) %>% rename(lon=long))
+file <- "bioDivPolygons_3D_rotating"
+x1 <- "BIODIVERSITY"
+clrs <- c("royalblue", "purple", "orange", "yellow")
+
+nyco$id <- nyco$GEOID
+nyc_shape@data$id <- rownames(nyc_shape@data)
+gg_nyc <- ggplot2::fortify(nyc_shape, region = "id") %>%
+  left_join(nyco[seq(1, 162450, 75), c(2, seq(153,176), 178)], by = "id")
+ gg_nyc <- map(1:2166, ~mutate(gg_nyc, frameID = "GEOID"))
+save_map(bio[[1]], z.name=x1, id=id, lon=0, lat=20, n.period=n, n.frames=n, col=clrs, type="polygons", file=file, save.plot=FALSE, return.plot=TRUE)
+```
